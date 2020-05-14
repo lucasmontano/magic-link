@@ -1,24 +1,23 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
+from fastapi.encoders import jsonable_encoder
 from pydantic import BaseModel
-from typing import List
 from redis import Redis
 from rq import Queue
 
-INVALID_OPTIONS = "The current poll only accept voting in the following options: "
+INVALID_OPTIONS = "You are trying to vote in one or more invalid options, please check the available options."
 
 app = FastAPI()
 
 redis_conn = Redis()
 votes_queue = Queue('votes', connection=redis_conn)
 
-current_options = {'COBOL', 'VB', 'Delphi'}
-# TODO save dict/set into redis
-redis_conn.sadd("current_poll_options", current_options)
+# todo load current_options from database
+redis_conn.sadd('poll_options', 'COBOL', 'VB', 'Delphi')
 
 
 class Vote(BaseModel):
     identifier: str
-    options: List[str]
+    options: set
 
 
 def confirm_vote(vote: Vote):
@@ -26,13 +25,11 @@ def confirm_vote(vote: Vote):
     return vote.options
 
 
-def check_invalid_options(vote: Vote):
-    # TODO check if current_poll_options contains all vote.options
-    invalid_options: List[str]
+def check_valid_options(vote: Vote):
     for option in vote.options:
-        if not redis_conn.hexists("current_poll_options", option):
-            invalid_options.append(option)
-    return invalid_options
+        if not redis_conn.sismember("poll_options", option):
+            return False
+    return True
 
 
 @app.get("/")
@@ -41,13 +38,13 @@ def read_root():
     return {"Hello": "World"}
 
 
-@app.post("/vote/")
+@app.post("/vote/", status_code=204)
 def vote(vote: Vote):
-    invalid_options = check_invalid_options(vote)
-    if len(invalid_options) == 0:
+    if check_valid_options(vote):
         votes_queue.enqueue(confirm_vote, vote)
-        return ""
     else:
-        return {
-            "message": INVALID_OPTIONS + invalid_options.__str__()
-        }
+        error_detail = jsonable_encoder({
+            "message": INVALID_OPTIONS,
+            "options": redis_conn.smembers("poll_options")
+        })
+        raise HTTPException(status_code=400, detail=error_detail)
