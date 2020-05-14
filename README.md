@@ -1,13 +1,26 @@
 # ranked-voting
-Preferential voting using ranked voting method
-## getting started
-    
-## developing
+This is the second edition of #umaStackQueNaoDomino. Python Edition.
+The project offer API for a Preferential Voting System using the ranked voting method.
 
-## features
+# First things first 
+You need to have pip (of course).
+ 
+- `python3 -m venv env`
+- `source env/bin/activate`
+- `which python`
+- `pip install fastapi`
+- `pip install uvicorn`
+- `pip install rq`
+- `pip install redis`
 
-## configuration
+## How to Run
+### Running FastAPI
+- `uvicorn main:app --reload`
 
-## conttributing
+### Running Redis Server
+- `redis-server`
+
+### Listening the Queue
+- `rq worker votes`   
 
 ## links
