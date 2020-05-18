@@ -3,6 +3,7 @@ from fastapi.encoders import jsonable_encoder
 from pydantic import BaseModel
 from redis import Redis
 from rq import Queue
+import jwt
 
 INVALID_OPTIONS = "You are trying to vote in one or more invalid options, please check the available options."
 
@@ -20,8 +21,10 @@ class Vote(BaseModel):
     options: set
 
 
-def confirm_vote(vote: Vote):
-    print(vote.identifier)
+def confirm_vote(vote: Vote):    
+    encoded = str(jwt.encode(jsonable_encoder(vote.dict()),'secret', algorithm='HS256'))
+    print("vote enconded to JWT: " + encoded)
+    print("sending confirmation to: " + vote.identifier)    
     return vote.options
 
 
