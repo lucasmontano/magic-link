@@ -4,6 +4,9 @@ from pydantic import BaseModel
 from redis import Redis
 from rq import Queue
 import jwt
+import os
+from sendgrid import SendGridAPIClient
+from sendgrid.helpers.mail import Mail
 
 INVALID_OPTIONS = "You are trying to vote in one or more invalid options, please check the available options."
 
@@ -24,7 +27,21 @@ class Vote(BaseModel):
 def confirm_vote(vote: Vote):    
     encoded = str(jwt.encode(jsonable_encoder(vote.dict()),'secret', algorithm='HS256'))
     print("vote enconded to JWT: " + encoded)
-    print("sending confirmation to: " + vote.identifier)    
+    print("sending confirmation to: " + vote.identifier)
+    message = Mail(
+        from_email='evoluindo@lucasmontano.com',
+        to_emails=vote.identifier,
+        subject='Are you a bot?',
+        html_content='<a href="http://127.0.0.1:8000/confirm/' + encoded + '">Confirm you are human or a super smart bot: </a>')
+    try:
+        sg = SendGridAPIClient(os.environ.get('SENDGRID_API_KEY'))
+        response = sg.send(message)
+        print(response.status_code)
+        print(response.body)
+        print(response.headers)
+    except Exception as e:
+        print(e.message)
+
     return vote.options
 
 
