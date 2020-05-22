@@ -8,29 +8,25 @@ import os
 from sendgrid import SendGridAPIClient
 from sendgrid.helpers.mail import Mail
 
-INVALID_OPTIONS = "You are trying to vote in one or more invalid options, please check the available options."
+INVALID_IDENTIFIER = "Please, check identifier."
 
 app = FastAPI()
 
 redis_conn = Redis()
-votes_queue = Queue('votes', connection=redis_conn)
+magic_link_queue = Queue('send_magic_links', connection=redis_conn)
 
-# todo load current_options from database
-redis_conn.sadd('poll_options', 'COBOL', 'VB', 'Delphi')
-
-
-class Vote(BaseModel):
+class MagicLink(BaseModel):
     identifier: str
-    options: set
+    payload: dict
 
 
-def confirm_vote(vote: Vote):    
-    encoded = str(jwt.encode(jsonable_encoder(vote.dict()),'secret', algorithm='HS256'))
-    print("vote enconded to JWT: " + encoded)
-    print("sending confirmation to: " + vote.identifier)
+def confirm_identifier(magic: MagicLink):
+    encoded = str(jwt.encode(jsonable_encoder(magic.dict()), 'secret', algorithm='HS256'))
+    print("Payload enconded to JWT: " + encoded)
+    print("sending confirmation to: " + magic.identifier)
     message = Mail(
         from_email='evoluindo@lucasmontano.com',
-        to_emails=vote.identifier,
+        to_emails=magic.identifier,
         subject='Are you a bot?',
         html_content='<a href="http://127.0.0.1:8000/confirm/' + encoded + '">Confirm you are human or a super smart bot: </a>')
     try:
@@ -40,31 +36,27 @@ def confirm_vote(vote: Vote):
         print(response.body)
         print(response.headers)
     except Exception as e:
-        print(e.message)
+        print(e.body)
 
-    return vote.options
+    return magic.payload
 
 
-def check_valid_options(vote: Vote):
-    for option in vote.options:
-        if not redis_conn.sismember("poll_options", option):
-            return False
+def validate_identifier(magic: MagicLink):
+    # TODO validate identifier with regex
     return True
 
 
-@app.get("/")
-def read_root():
-    print(votes_queue.jobs)
-    return {"Hello": "World"}
+@app.post("/validate/", status_code=204)
+def validate(jwt: str):
+    # TODO validate JWT
+    print(jwt.jobs)
 
-
-@app.post("/vote/", status_code=204)
-def vote(vote: Vote):
-    if check_valid_options(vote):
-        votes_queue.enqueue(confirm_vote, vote)
+@app.post("/send/", status_code=204)
+def send(magic: MagicLink):
+    if validate_identifier(magic):
+        magic_link_queue.enqueue(confirm_identifier, magic)
     else:
         error_detail = jsonable_encoder({
-            "message": INVALID_OPTIONS,
-            "options": redis_conn.smembers("poll_options")
+            "message": INVALID_IDENTIFIER            
         })
         raise HTTPException(status_code=400, detail=error_detail)
