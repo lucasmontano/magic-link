@@ -1,6 +1,7 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.encoders import jsonable_encoder
 from pydantic import BaseModel
+import re
 from redis import Redis
 from rq import Queue
 import jwt
@@ -8,6 +9,7 @@ import os
 from sendgrid import SendGridAPIClient
 from sendgrid.helpers.mail import Mail
 
+EMAIL_REGEX = re.compile(r"[^@]+@[^@]+\.[^@]+")
 INVALID_IDENTIFIER = "Please, check identifier."
 
 app = FastAPI()
@@ -15,17 +17,18 @@ app = FastAPI()
 redis_conn = Redis()
 magic_link_queue = Queue('send_magic_links', connection=redis_conn)
 
+
 class MagicLink(BaseModel):
     identifier: str
     payload: dict
 
 
 def confirm_identifier(magic: MagicLink):
-    encoded = str(jwt.encode(jsonable_encoder(magic.dict()), 'secret', algorithm='HS256'))
+    encoded = str(jwt.encode(jsonable_encoder(magic.dict()), os.environ.get('JWT_SECRET'), algorithm='HS256'))
     print("Payload enconded to JWT: " + encoded)
     print("sending confirmation to: " + magic.identifier)
     message = Mail(
-        from_email='evoluindo@lucasmontano.com',
+        from_email=os.environ.get('SENDGRID_SENDER'),
         to_emails=magic.identifier,
         subject='Are you a bot?',
         html_content='<a href="http://127.0.0.1:8000/confirm/' + encoded + '">Confirm you are human or a super smart bot: </a>')
@@ -42,8 +45,7 @@ def confirm_identifier(magic: MagicLink):
 
 
 def validate_identifier(magic: MagicLink):
-    # TODO validate identifier with regex
-    return True
+    return EMAIL_REGEX.match(magic.identifier)
 
 
 @app.post("/validate/", status_code=204)
@@ -51,12 +53,13 @@ def validate(jwt: str):
     # TODO validate JWT
     print(jwt.jobs)
 
+
 @app.post("/send/", status_code=204)
 def send(magic: MagicLink):
     if validate_identifier(magic):
         magic_link_queue.enqueue(confirm_identifier, magic)
     else:
         error_detail = jsonable_encoder({
-            "message": INVALID_IDENTIFIER            
+            "message": INVALID_IDENTIFIER
         })
         raise HTTPException(status_code=400, detail=error_detail)
