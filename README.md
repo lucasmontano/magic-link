@@ -12,10 +12,7 @@ You need to have pip (of course).
 - `python3 -m venv env`
 - `source env/bin/activate`
 - `which python`
-- `pip install fastapi`
-- `pip install uvicorn`
-- `pip install rq`
-- `pip install redis`
+- `pip install -r requirements.txt`
 
 ## How to Run
 ### Running FastAPI
