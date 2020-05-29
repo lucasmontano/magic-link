@@ -1,7 +1,6 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.encoders import jsonable_encoder
-from pydantic import BaseModel
-import re
+from pydantic import BaseModel, EmailStr
 from redis import Redis
 from rq import Queue
 import jwt
@@ -9,7 +8,6 @@ import os
 from sendgrid import SendGridAPIClient
 from sendgrid.helpers.mail import Mail
 
-EMAIL_REGEX = re.compile(r"[^@]+@[^@]+\.[^@]+")
 INVALID_IDENTIFIER = "Please, check identifier."
 INVALID_JWT = "Of course! You shall not pass!"
 
@@ -22,7 +20,7 @@ magic_link_queue = Queue('send_magic_links', connection=redis_conn)
 
 
 class MagicLink(BaseModel):
-    identifier: str
+    identifier: EmailStr
     payload: dict
 
 
@@ -47,10 +45,6 @@ def confirm_identifier(magic: MagicLink):
     return magic.payload
 
 
-def validate_identifier(magic: MagicLink):
-    return EMAIL_REGEX.match(magic.identifier)
-
-
 @app.get("/validate/", status_code=204)
 def validate(token: str):    
     try:        
@@ -63,14 +57,8 @@ def validate(token: str):
             "message": INVALID_JWT
         })
         raise HTTPException(status_code=400, detail=error_detail)
-    
+        
 
 @app.post("/send/", status_code=204)
 def send(magic: MagicLink):
-    if validate_identifier(magic):
-        magic_link_queue.enqueue(confirm_identifier, magic)
-    else:
-        error_detail = jsonable_encoder({
-            "message": INVALID_IDENTIFIER
-        })
-        raise HTTPException(status_code=400, detail=error_detail)
+    magic_link_queue.enqueue(confirm_identifier, magic)
