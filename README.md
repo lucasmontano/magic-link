@@ -24,4 +24,6 @@ You need to have pip (of course).
 ### Consume Queue
 - `rq worker send_magic_links`
 
-## links
+## Firestore
+On this project we store validated magic links into Firebase Firestore, please check the oficial [quick start documentation](https://firebase.google.com/docs/firestore/quickstart) in order to setup your project and export the `serviceAccountKey.json`
+
