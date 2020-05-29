@@ -3,3 +3,4 @@ uvicorn
 rq
 redis
 pydantic[email]
+firebase-admin
