@@ -7,6 +7,10 @@ import jwt
 import os
 from sendgrid import SendGridAPIClient
 from sendgrid.helpers.mail import Mail
+from pydantic import parse_obj_as
+import firebase_admin
+from firebase_admin import credentials
+from firebase_admin import firestore
 
 INVALID_IDENTIFIER = "Please, check identifier."
 INVALID_JWT = "Of course! You shall not pass!"
@@ -48,9 +52,17 @@ def confirm_identifier(magic: MagicLink):
 @app.get("/validate/", status_code=204)
 def validate(token: str):    
     try:        
-        payload = jwt.decode(token, JWT_SECRET, algorithms=['HS256'])
-        # TODO add identifier validation status to the database
-        print(payload)
+        magic_link = parse_obj_as(
+            MagicLink, 
+            jwt.decode(token, JWT_SECRET, algorithms=['HS256'])
+        )
+
+        cred = credentials.Certificate("./serviceAccountKey.json")
+        firebase_admin.initialize_app(cred)
+        db = firestore.client()
+
+        doc_ref = db.collection('users').document(magic_link.identifier)
+        doc_ref.set(magic_link.payload)
     except Exception as e:
         print(e)
         error_detail = jsonable_encoder({
